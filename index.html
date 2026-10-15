@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a1e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FPV Drone">
+<title>FPV Drone: Demolition</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230a0a1e'/%3E%3Ccircle cx='50' cy='50' r='8' fill='%2300f0ff'/%3E%3Cline x1='20' y1='20' x2='80' y2='80' stroke='%2300f0ff' stroke-width='3'/%3E%3Cline x1='80' y1='20' x2='20' y2='80' stroke='%2300f0ff' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{height:100%;overflow:hidden;background:#0a0a1e;position:fixed;width:100%;overscroll-behavior:none}
+canvas{display:block;position:fixed;inset:0;touch-action:none}
+
+/* Crosshair */
+.crosshair{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:5}
+.crosshair svg{width:40px;height:40px;filter:drop-shadow(0 0 8px rgba(0,240,255,.8))}
+
+/* HUD */
+.hud{position:fixed;inset:0;pointer-events:none;z-index:10;padding:calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));font-family:'SF Mono',Menlo,Monaco,monospace}
+.hud-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.hud-box{background:rgba(10,10,30,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(0,240,255,.3);border-radius:14px;padding:8px 14px;color:#00f0ff;font-weight:800;font-size:13px;box-shadow:0 4px 20px rgba(0,240,255,.15)}
+.hud-box .val{color:#fff;font-size:16px}
+.hud-box .lbl{font-size:10px;color:#7a7a9e;letter-spacing:.1em;margin-top:2px}
+.hud-box.pink{border-color:rgba(255,0,170,.3);color:#ff33bb}
+.hud-box.pink .val{color:#fff}
+
+/* Bottom info bar */
+.hud-bottom{position:absolute;bottom:calc(14px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:8px}
+.hud-mini{background:rgba(10,10,30,.55);backdrop-filter:blur(16px);border:1px solid rgba(0,240,255,.2);border-radius:10px;padding:6px 12px;color:#00f0ff;font-size:11px;font-weight:700;font-family:'SF Mono',Menlo,Monaco,monospace;white-space:nowrap}
+.hud-mini .v{color:#fff}
+
+/* Vignette */
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:3;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.7) 100%)}
+
+/* Damage flash */
+.damage-flash{position:fixed;inset:0;pointer-events:none;z-index:20;background:radial-gradient(ellipse at center,transparent 30%,rgba(255,50,50,.6) 100%);opacity:0;transition:opacity .15s}
+.damage-flash.show{opacity:1}
+
+/* Sticks */
+.stick-zone{position:fixed;inset:0;z-index:4}
+.stick-zone.left{right:50%}
+.stick-zone.right{left:50%}
+.stick{position:absolute;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(0,240,255,.08),rgba(0,240,255,.02));border:2px solid rgba(0,240,255,.2);transform:translate(-50%,-50%);opacity:0;transition:opacity .2s;pointer-events:none}
+.stick.show{opacity:1}
+.stick.right{background:radial-gradient(circle,rgba(255,0,170,.08),rgba(255,0,170,.02));border-color:rgba(255,0,170,.2)}
+.stick-knob{position:absolute;left:50%;top:50%;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#00f0ff,#006688);box-shadow:0 0 25px rgba(0,240,255,.6),inset 0 2px 8px rgba(255,255,255,.3);transform:translate(-50%,-50%)}
+.stick.right .stick-knob{background:radial-gradient(circle at 35% 35%,#ff33bb,#880055);box-shadow:0 0 25px rgba(255,0,170,.6),inset 0 2px 8px rgba(255,255,255,.3)}
+
+/* Fire button */
+.fire-btn{position:fixed;right:calc(20px + env(safe-area-inset-right));bottom:calc(180px + env(safe-area-inset-bottom));width:76px;height:76px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ff5533,#aa0022);border:2px solid rgba(255,100,50,.6);color:#fff;font-weight:900;font-size:12px;font-family:'SF Mono',Menlo,Monaco,monospace;box-shadow:0 0 30px rgba(255,80,50,.5),inset 0 2px 10px rgba(255,255,255,.3);z-index:6;display:none;align-items:center;justify-content:center;letter-spacing:.05em;transition:transform .1s}
+.fire-btn.show{display:flex}
+.fire-btn:active{transform:scale(.9);box-shadow:0 0 50px rgba(255,80,50,.9)}
+
+/* Overlays */
+.overlay{position:fixed;inset:0;z-index:100;background:radial-gradient(circle at 50% 50%,rgba(20,10,50,.96),rgba(5,5,20,.99));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:'SF Mono',Menlo,Monaco,monospace}
+.overlay.hide{display:none}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 20px rgba(0,240,255,.6))}50%{filter:drop-shadow(0 0 40px rgba(0,240,255,1))}}
+@keyframes gradMove{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes pop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+@keyframes shine{0%{background-position:-200% 0}100%{background-position:200% 0}}
+
+.drone-icon{width:130px;height:130px;margin-bottom:18px;animation:float 3s ease-in-out infinite,glow 2s infinite}
+.title{font-size:clamp(30px,8vw,52px);font-weight:900;letter-spacing:-.03em;background:linear-gradient(135deg,#00f0ff,#ff00aa,#ffcc00);background-size:200% 200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:gradMove 4s ease infinite;margin-bottom:6px}
+.subtitle{color:#7a7a9e;font-size:13px;letter-spacing:.15em;text-transform:uppercase;font-weight:600;margin-bottom:32px}
+
+.btn{padding:16px 44px;border-radius:100px;border:none;background:linear-gradient(135deg,#00f0ff,#0080aa);color:#001020;font-weight:900;font-size:16px;letter-spacing:.08em;text-transform:uppercase;font-family:inherit;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);box-shadow:0 8px 30px rgba(0,240,255,.5),inset 0 2px 0 rgba(255,255,255,.3);margin-bottom:12px;position:relative;overflow:hidden}
+.btn::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);background-size:200% 100%;animation:shine 2.5s infinite}
+.btn:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 15px 50px rgba(0,240,255,.7)}
+.btn-pink{background:linear-gradient(135deg,#ff33bb,#880055);color:#fff;box-shadow:0 8px 30px rgba(255,0,170,.5),inset 0 2px 0 rgba(255,255,255,.3)}
+.btn-pink:hover{box-shadow:0 15px 50px rgba(255,0,170,.7)}
+
+.stats{display:flex;gap:18px;margin-bottom:28px;padding:16px 24px;border-radius:18px;background:rgba(255,255,255,.03);border:1px solid rgba(0,240,255,.15)}
+.stat{text-align:center}
+.stat-v{font-size:24px;font-weight:900;color:#00f0ff}
+.stat-l{font-size:10px;color:#7a7a9e;letter-spacing:.15em;text-transform:uppercase;margin-top:4px;font-weight:600}
+
+.win-title{font-size:clamp(28px,7vw,44px);font-weight:900;background:linear-gradient(135deg,#00ff88,#00f0ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;animation:pop .5s}
+.lose-title{font-size:clamp(28px,7vw,44px);font-weight:900;color:#ff3366;text-shadow:0 0 40px rgba(255,51,102,.8);margin-bottom:8px;animation:pop .5s}
+
+.controls-info{margin-top:24px;color:#5a5a7e;font-size:11px;line-height:1.9;font-family:inherit;letter-spacing:.05em;max-width:340px}
+.controls-info b{color:#00f0ff}
+
+@media(max-width:700px){
+  .title{letter-spacing:-.02em}
+  .stats{gap:12px;padding:12px 18px}
+  .stat-v{font-size:20px}
+  .btn{padding:14px 32px;font-size:14px}
+  .controls-info{font-size:10.5px}
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div class="vignette"></div>
+<div class="damage-flash" id="damageFlash"></div>
+
+<div class="crosshair">
+  <svg viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="14" fill="none" stroke="#00f0ff" stroke-width="1.5" opacity=".6"/>
+    <circle cx="20" cy="20" r="2" fill="#00f0ff"/>
+    <line x1="20" y1="2" x2="20" y2="9" stroke="#00f0ff" stroke-width="2"/>
+    <line x1="20" y1="31" x2="20" y2="38" stroke="#00f0ff" stroke-width="2"/>
+    <line x1="2" y1="20" x2="9" y2="20" stroke="#00f0ff" stroke-width="2"/>
+    <line x1="31" y1="20" x2="38" y2="20" stroke="#00f0ff" stroke-width="2"/>
+  </svg>
+</div>
+
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-top">
+    <div>
+      <div class="hud-box">
+        <div><span class="lbl">ЗДАНИЯ</span> <span class="val" id="leftVal">0</span></div>
+      </div>
+      <div class="hud-box" style="margin-top:6px;border-color:rgba(255,204,0,.3);color:#ffcc00">
+        <div><span class="lbl">ОЧКИ</span> <span class="val" id="scoreVal">0</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="hud-box pink" style="text-align:right">
+        <div><span class="val" id="timeVal">0:00</span></div>
+        <div class="lbl">ВРЕМЯ</div>
+      </div>
+      <div class="hud-box pink" style="margin-top:6px;text-align:right" id="rocketBox">
+        <div><span class="val" id="rocketVal">5</span> 🔥</div>
+        <div class="lbl">ЗАРЯДЫ</div>
+      </div>
+    </div>
+  </div>
+  <div class="hud-bottom">
+    <div class="hud-mini">ВЫС <span class="v" id="altVal">0</span>м</div>
+    <div class="hud-mini">СКО <span class="v" id="spdVal">0</span>м/с</div>
+  </div>
+</div>
+
+<div class="stick-zone left" id="stickZoneL"><div class="stick left" id="stickL"><div class="stick-knob" id="knobL"></div></div></div>
+<div class="stick-zone right" id="stickZoneR"><div class="stick right" id="stickR"><div class="stick-knob" id="knobR"></div></div></div>
+
+<button class="fire-btn" id="fireBtn">БОМБА</button>
+
+<!-- MENU -->
+<div class="overlay" id="menuScreen">
+  <div class="drone-icon">
+    <svg viewBox="0 0 100 100">
+      <line x1="15" y1="25" x2="85" y2="75" stroke="#00f0ff" stroke-width="3" stroke-linecap="round"/>
+      <line x1="85" y1="25" x2="15" y2="75" stroke="#00f0ff" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="15" cy="25" r="10" fill="none" stroke="#00f0ff" stroke-width="2.5"/>
+      <circle cx="85" cy="25" r="10" fill="none" stroke="#00f0ff" stroke-width="2.5"/>
+      <circle cx="15" cy="75" r="10" fill="none" stroke="#00f0ff" stroke-width="2.5"/>
+      <circle cx="85" cy="75" r="10" fill="none" stroke="#00f0ff" stroke-width="2.5"/>
+      <circle cx="50" cy="50" r="14" fill="#ff00aa"/>
+      <circle cx="50" cy="50" r="9" fill="#0a0a1e"/>
+      <circle cx="50" cy="50" r="4" fill="#00f0ff"/>
+    </svg>
+  </div>
+  <h1 class="title">FPV DRONE</h1>
+  <p class="subtitle">Demolition · Demolition Simulator</p>
+  <button class="btn" id="playBtn">▶ НАЧАТЬ</button>
+  <button class="btn btn-pink" id="helpBtn" style="display:none">?</button>
+  <div class="controls-info" id="pcInfo">
+    <b>W/S</b> — тангаж · <b>A/D</b> — крен · <b>Q/E</b> — рыскание<br>
+    <b>SHIFT/CTRL</b> — газ · <b>ПРОБЕЛ</b> — бомба
+  </div>
+  <div class="controls-info" id="mobInfo" style="display:none">
+    <b>Левый стик</b> — газ + рыскание<br>
+    <b>Правый стик</b> — тангаж + крен<br>
+    <b>Кнопка БОМБА</b> — сброс
+  </div>
+</div>
+
+<!-- WIN -->
+<div class="overlay hide" id="winScreen">
+  <h2 class="win-title">✓ РАЗРУШЕНО</h2>
+  <p style="color:#7a7a9e;margin-bottom:20px;font-size:13px;letter-spacing:.1em">Все здания уничтожены</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-v" id="winScore">0</div><div class="stat-l">ОЧКИ</div></div>
+    <div class="stat"><div class="stat-v" id="winTime">0:00</div><div class="stat-l">ВРЕМЯ</div></div>
+  </div>
+  <button class="btn" id="winRetry">▶ ЕЩЁ РАЗ</button>
+  <button class="btn btn-pink" id="winMenu">◀ МЕНЮ</button>
+</div>
+
+<!-- LOSE -->
+<div class="overlay hide" id="loseScreen">
+  <h2 class="lose-title">СБИТ</h2>
+  <p style="color:#7a7a9e;margin-bottom:20px;font-size:13px;letter-spacing:.1em" id="loseReason">Дрон разбился</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-v" id="loseScore">0</div><div class="stat-l">ОЧКИ</div></div>
+    <div class="stat"><div class="stat-v" id="loseDestroyed">0</div><div class="stat-l">ЗДАНИЙ</div></div>
+  </div>
+  <button class="btn" id="loseRetry">▶ ЕЩЁ РАЗ</button>
+  <button class="btn btn-pink" id="loseMenu">◀ МЕНЮ</button>
+</div>
+
+<script>
+/* ================= CANVAS ================= */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', {alpha: false});
+let W = 0, H = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ================= MATH ================= */
+function rotY(a){const c=Math.cos(a),s=Math.sin(a);return[c,0,s,0,1,0,-s,0,c]}
+function rotX(a){const c=Math.cos(a),s=Math.sin(a);return[1,0,0,0,c,-s,0,s,c]}
+function rotZ(a){const c=Math.cos(a),s=Math.sin(a);return[c,-s,0,s,c,0,0,0,1]}
+function matMul(a,b){
+  const r = new Array(9);
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+    let s=0; for(let k=0;k<3;k++) s += a[i*3+k]*b[k*3+j];
+    r[i*3+j]=s;
+  }
+  return r;
+}
+function matApply(m, v){
+  return {
+    x: m[0]*v.x + m[1]*v.y + m[2]*v.z,
+    y: m[3]*v.x + m[4]*v.y + m[5]*v.z,
+    z: m[6]*v.x + m[7]*v.y + m[8]*v.z
+  };
+}
+
+/* ================= CAMERA (drone) ================= */
+const drone = {
+  pos: {x: 0, y: 15, z: 0},
+  vel: {x: 0, y: 0, z: 0},
+  yaw: 0, pitch: 0, roll: 0,
+  // angular rates
+  yawRate: 0, pitchRate: 0, rollRate: 0,
+  alive: true
+};
+
+const CFG = {
+  gravity: 12,
+  maxThrust: 26,
+  drag: 0.06,
+  angDrag: 3.0,
+  maxYawRate: 2.2,
+  maxPitchRate: 3.0,
+  maxRollRate: 4.5,
+  fov: 480,
+  cameraShake: 0
+};
+
+/* ================= BUILDINGS ================= */
+const buildings = [];
+let destroyedCount = 0;
+let totalBuildings = 0;
+
+function spawnBuilding(){
+  const x = (Math.random() - 0.5) * 320;
+  const z = (Math.random() - 0.5) * 320;
+  const w = 12 + Math.random() * 18;
+  const d = 12 + Math.random() * 18;
+  const h = 14 + Math.random() * 45;
+  const colorHue = 260 + Math.random() * 60;
+  return {
+    x, z, w, d, h, y: 0,
+    hp: Math.ceil(h / 20),
+    maxHp: Math.ceil(h / 20),
+    alive: true,
+    color: `hsl(${colorHue},70%,20%)`,
+    edgeColor: `hsl(${colorHue},90%,60%)`
+  };
+}
+
+/* ================= BOMBS ================= */
+const bombs = [];
+const explosions = [];
+let ammo = 5;
+
+function fireBomb(){
+  if(ammo <= 0) return;
+  ammo--;
+  updateHUD();
+  // Get forward vector from drone orientation
+  const R = matMul(matMul(rotY(drone.yaw), rotX(drone.pitch)), rotZ(drone.roll));
+  const forward = matApply(R, {x:0, y:0, z:1});
+  const right = matApply(R, {x:1, y:0, z:0});
+  const up = matApply(R, {x:0, y:1, z:0});
+  // Spawn at drone nose
+  const px = drone.pos.x + forward.x * 1.5;
+  const py = drone.pos.y + forward.y * 1.5;
+  const pz = drone.pos.z + forward.z * 1.5;
+  bombs.push({
+    pos: {x: px, y: py, z: pz},
+    vel: {
+      x: forward.x * 60 + drone.vel.x,
+      y: forward.y * 60 + drone.vel.y,
+      z: forward.z * 60 + drone.vel.z
+    },
+    life: 3
+  });
+  CFG.cameraShake = Math.max(CFG.cameraShake, 4);
+}
+
+function explode(x, y, z){
+  const particles = [];
+  const N = 40;
+  for(let i = 0; i < N; i++){
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const speed = 8 + Math.random() * 18;
+    particles.push({
+      pos: {x, y, z},
+      vel: {
+        x: Math.sin(phi) * Math.cos(theta) * speed,
+        y: Math.abs(Math.cos(phi)) * speed * 1.2,
+        z: Math.sin(phi) * Math.sin(theta) * speed
+      },
+      life: 1,
+      maxLife: 1,
+      size: 4 + Math.random() * 8,
+      hue: 15 + Math.random() * 45
+    });
+  }
+  // sparkles
+  for(let i = 0; i < 20; i++){
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const speed = 20 + Math.random() * 30;
+    particles.push({
+      pos: {x, y, z},
+      vel: {
+        x: Math.sin(phi) * Math.cos(theta) * speed,
+        y: Math.abs(Math.cos(phi)) * speed * 1.4,
+        z: Math.sin(phi) * Math.sin(theta) * speed
+      },
+      life: 1,
+      maxLife: 1,
+      size: 2 + Math.random() * 3,
+      hue: 50 + Math.random() * 15
+    });
+  }
+  explosions.push({particles, smoke: []});
+  // smoke
+  for(let i = 0; i < 15; i++){
+    explosions[explosions.length-1].smoke.push({
+      pos: {x, y, z},
+      vel: {
+        x: (Math.random()-0.5) * 6,
+        y: 3 + Math.random() * 5,
+        z: (Math.random()-0.5) * 6
+      },
+      life: 1,
+      maxLife: 1,
+      size: 8 + Math.random() * 15
+    });
+  }
+  CFG.cameraShake = Math.max(CFG.cameraShake, 12);
+}
+
+/* ================= INPUT ================= */
+const input = {
+  // left stick: throttle (y) + yaw (x)
+  leftX: 0, leftY: 0, leftActive: false,
+  // right stick: pitch (y) + roll (x)
+  rightX: 0, rightY: 0, rightActive: false,
+  // keyboard
+  keys: {}
+};
+
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+window.addEventListener('keydown', e => {
+  input.keys[e.key.toLowerCase()] = true;
+  if(e.key === ' ') { e.preventDefault(); fireBomb(); }
+  if(['arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) e.preventDefault();
+});
+window.addEventListener('keyup', e => {
+  input.keys[e.key.toLowerCase()] = false;
+});
+
+function setupSticks(){
+  const zones = [
+    {zone: document.getElementById('stickZoneL'), stick: document.getElementById('stickL'), knob: document.getElementById('knobL'), side: 'left'},
+    {zone: document.getElementById('stickZoneR'), stick: document.getElementById('stickR'), knob: document.getElementById('knobR'), side: 'right'}
+  ];
+
+  zones.forEach(z => {
+    let touchId = null;
+    let startX = 0, startY = 0;
+    const maxDist = 60;
+
+    function onStart(e){
+      e.preventDefault();
+      if(touchId !== null) return;
+      const t = e.changedTouches[0];
+      touchId = t.identifier;
+      startX = t.clientX;
+      startY = t.clientY;
+      z.stick.style.left = t.clientX + 'px';
+      z.stick.style.top = t.clientY + 'px';
+      z.stick.classList.add('show');
+      z.knob.style.left = '50%';
+      z.knob.style.top = '50%';
+      if(z.side === 'left') input.leftActive = true;
+      else input.rightActive = true;
+    }
+
+    function onMove(e){
+      e.preventDefault();
+      for(const t of e.changedTouches){
+        if(t.identifier === touchId){
+          let dx = t.clientX - startX;
+          let dy = t.clientY - startY;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if(dist > maxDist){
+            dx = dx / dist * maxDist;
+            dy = dy / dist * maxDist;
+          }
+          const nx = dx / maxDist;
+          const ny = dy / maxDist;
+          z.knob.style.left = `calc(50% + ${dx}px)`;
+          z.knob.style.top = `calc(50% + ${dy}px)`;
+          if(z.side === 'left'){
+            input.leftX = nx;
+            input.leftY = ny;
+          } else {
+            input.rightX = nx;
+            input.rightY = ny;
+          }
+        }
+      }
+    }
+
+    function onEnd(e){
+      e.preventDefault();
+      for(const t of e.changedTouches){
+        if(t.identifier === touchId){
+          touchId = null;
+          z.stick.classList.remove('show');
+          if(z.side === 'left'){ input.leftX = 0; input.leftY = 0; input.leftActive = false; }
+          else { input.rightX = 0; input.rightY = 0; input.rightActive = false; }
+        }
+      }
+    }
+
+    z.zone.addEventListener('touchstart', onStart, {passive:false});
+    z.zone.addEventListener('touchmove', onMove, {passive:false});
+    z.zone.addEventListener('touchend', onEnd, {passive:false});
+    z.zone.addEventListener('touchcancel', onEnd, {passive:false});
+  });
+
+  const fireBtn = document.getElementById('fireBtn');
+  fireBtn.addEventListener('touchstart', e => { e.preventDefault(); fireBomb(); }, {passive:false});
+  canvas.addEventListener('click', () => { if(!isMobile) fireBomb(); });
+}
+
+/* ================= PHYSICS ================= */
+function updateDrone(dt){
+  if(!drone.alive) return;
+
+  // Read input
+  let throttle = 0, yawIn = 0, pitchIn = 0, rollIn = 0;
+
+  if(isMobile){
+    // Left stick: throttle (inverted Y) + yaw
+    throttle = -input.leftY;     // up = positive throttle
+    yawIn = input.leftX;
+    // Right stick: pitch + roll
+    pitchIn = -input.rightY;     // up = nose down
+    rollIn = input.rightX;
+  } else {
+    // Keyboard
+    const k = input.keys;
+    if(k['shift']) throttle += 1;
+    if(k['control']) throttle -= 1;
+    if(!k['shift'] && !k['control']) throttle = 0.5; // hover by default
+    if(k['w']) pitchIn = 1;
+    if(k['s']) pitchIn = -1;
+    if(k['a']) rollIn = -1;
+    if(k['d']) rollIn = 1;
+    if(k['q']) yawIn = -1;
+    if(k['e']) yawIn = 1;
+  }
+
+  // Angular rates follow input (with some lag)
+  const angAccel = 15;
+  drone.yawRate += (yawIn * CFG.maxYawRate - drone.yawRate) * Math.min(1, angAccel * dt);
+  drone.pitchRate += (pitchIn * CFG.maxPitchRate - drone.pitchRate) * Math.min(1, angAccel * dt);
+  drone.rollRate += (rollIn * CFG.maxRollRate - drone.rollRate) * Math.min(1, angAccel * dt);
+
+  drone.yaw += drone.yawRate * dt;
+  drone.pitch += drone.pitchRate * dt;
+  drone.roll += drone.rollRate * dt;
+
+  // Clamp pitch to avoid gimbal issues
+  drone.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, drone.pitch));
+
+  // Compute orientation
+  const R = matMul(matMul(rotY(drone.yaw), rotX(drone.pitch)), rotZ(drone.roll));
+  const up = matApply(R, {x:0, y:1, z:0});
+  const forward = matApply(R, {x:0, y:0, z:1});
+
+  // Thrust along drone's up-vector
+  const thrust = Math.max(0, Math.min(1, throttle + 0.0)) * CFG.maxThrust;
+
+  // Acceleration
+  drone.vel.x += up.x * thrust * dt;
+  drone.vel.y += (up.y * thrust - CFG.gravity) * dt;
+  drone.vel.z += up.z * thrust * dt;
+
+  // Drag
+  const dragMul = Math.max(0, 1 - CFG.drag * dt * 60);
+  drone.vel.x *= dragMul;
+  drone.vel.y *= dragMul;
+  drone.vel.z *= dragMul;
+
+  // Velocity limit
+  const spd = Math.sqrt(drone.vel.x**2 + drone.vel.y**2 + drone.vel.z**2);
+  if(spd > 45){
+    const f = 45 / spd;
+    drone.vel.x *= f; drone.vel.y *= f; drone.vel.z *= f;
+  }
+
+  // Update position
+  drone.pos.x += drone.vel.x * dt;
+  drone.pos.y += drone.vel.y * dt;
+  drone.pos.z += drone.vel.z * dt;
+
+  // Ground / ceiling collision
+  if(drone.pos.y < 1.5){
+    drone.pos.y = 1.5;
+    drone.vel.y = Math.max(0, drone.vel.y);
+    if(Math.abs(drone.vel.y) > 8 || Math.abs(drone.vel.x) + Math.abs(drone.vel.z) > 25){
+      crash('Слишком жёсткая посадка');
+    }
+  }
+
+  // World boundary
+  const bound = 250;
+  if(Math.abs(drone.pos.x) > bound || Math.abs(drone.pos.z) > bound){
+    drone.pos.x = Math.max(-bound, Math.min(bound, drone.pos.x));
+    drone.pos.z = Math.max(-bound, Math.min(bound, drone.pos.z));
+    drone.vel.x *= -0.3;
+    drone.vel.z *= -0.3;
+  }
+
+  // Building collision
+  for(const b of buildings){
+    if(!b.alive) continue;
+    const halfW = b.w / 2 + 1;
+    const halfD = b.d / 2 + 1;
+    if(drone.pos.x > b.x - halfW && drone.pos.x < b.x + halfW &&
+       drone.pos.z > b.z - halfD && drone.pos.z < b.z + halfD &&
+       drone.pos.y < b.h){
+      crash('Врезался в здание');
+      return;
+    }
+  }
+
+  // Camera shake decay
+  CFG.cameraShake *= Math.max(0, 1 - 5 * dt);
+
+  // Slight idle wobble
+  CFG.cameraShake = Math.max(CFG.cameraShake, 0.15);
+}
+
+function crash(reason){
+  drone.alive = false;
+  explode(drone.pos.x, drone.pos.y, drone.pos.z);
+  setTimeout(() => loseGame(reason), 900);
+}
+
+function updateBombs(dt){
+  for(let i = bombs.length - 1; i >= 0; i--){
+    const b = bombs[i];
+    b.vel.y -= CFG.gravity * dt;
+    b.pos.x += b.vel.x * dt;
+    b.pos.y += b.vel.y * dt;
+    b.pos.z += b.vel.z * dt;
+    b.life -= dt;
+
+    let hit = false;
+
+    // Ground hit
+    if(b.pos.y < 0.5){
+      hit = true;
+    }
+
+    // Building hit
+    if(!hit){
+      for(const bd of buildings){
+        if(!bd.alive) continue;
+        const halfW = bd.w / 2;
+        const halfD = bd.d / 2;
+        if(b.pos.x > bd.x - halfW && b.pos.x < bd.x + halfW &&
+           b.pos.z > bd.z - halfD && b.pos.z < bd.z + halfD &&
+           b.pos.y > 0 && b.pos.y < bd.h){
+          hit = true;
+          bd.hp--;
+          if(bd.hp <= 0){
+            bd.alive = false;
+            destroyedCount++;
+            // big explosion on building
+            explode(bd.x, bd.h * 0.4, bd.z);
+            explode(bd.x + bd.w*0.3, bd.h * 0.7, bd.z - bd.d*0.3);
+            explode(bd.x - bd.w*0.3, bd.h * 0.3, bd.z + bd.d*0.3);
+            // debris chunks
+            spawnDebris(bd);
+          }
+          break;
+        }
+      }
+    }
+
+    if(hit || b.life <= 0){
+      if(hit) explode(b.pos.x, b.pos.y, b.pos.z);
+      bombs.splice(i, 1);
+    }
+  }
+}
+
+function spawnDebris(bd){
+  // Debris are just more particles in brownish/gray
+  for(let i = 0; i < 30; i++){
+    const px = bd.x + (Math.random() - 0.5) * bd.w;
+    const py = Math.random() * bd.h;
+    const pz = bd.z + (Math.random() - 0.5) * bd.d;
+    explosions.push({
+      particles: [{
+        pos: {x: px, y: py, z: pz},
+        vel: {
+          x: (Math.random() - 0.5) * 20,
+          y: Math.random() * 15,
+          z: (Math.random() - 0.5) * 20
+        },
+        life: 1,
+        maxLife: 1,
+        size: 2 + Math.random() * 4,
+        hue: 0, sat: 0, light: 30 + Math.random() * 30
+      }],
+      smoke: []
+    });
+  }
+}
+
+function updateExplosions(dt){
+  for(let i = explosions.length - 1; i >= 0; i--){
+    const ex = explosions[i];
+    let alive = false;
+    for(const p of ex.particles){
+      p.pos.x += p.vel.x * dt;
+      p.pos.y += p.vel.y * dt;
+      p.pos.z += p.vel.z * dt;
+      p.vel.y -= CFG.gravity * 1.5 * dt;
+      p.vel.x *= 0.97;
+      p.vel.z *= 0.97;
+      p.life -= dt * 1.2;
+      if(p.life > 0) alive = true;
+    }
+    for(const s of ex.smoke){
+      s.pos.x += s.vel.x * dt;
+      s.pos.y += s.vel.y * dt;
+      s.pos.z += s.vel.z * dt;
+      s.vel.x *= 0.98;
+      s.vel.z *= 0.98;
+      s.life -= dt * 0.6;
+      if(s.life > 0) alive = true;
+    }
+    ex.particles = ex.particles.filter(p => p.life > 0);
+    ex.smoke = ex.smoke.filter(s => s.life > 0);
+    if(!alive) explosions.splice(i, 1);
+  }
+}
+
+/* ================= RENDER ================= */
+function toCam(p){
+  // Translate
+  let dx = p.x - drone.pos.x;
+  let dy = p.y - drone.pos.y;
+  let dz = p.z - drone.pos.z;
+
+  // Yaw (inverse)
+  let c = Math.cos(-drone.yaw), s = Math.sin(-drone.yaw);
+  let x1 = c * dx - s * dz;
+  let z1 = s * dx + c * dz;
+  dx = x1; dz = z1;
+
+  // Pitch (inverse)
+  c = Math.cos(-drone.pitch); s = Math.sin(-drone.pitch);
+  let y1 = c * dy - s * dz;
+  z1 = s * dy + c * dz;
+  dy = y1; dz = z1;
+
+  // Roll (inverse)
+  c = Math.cos(-drone.roll); s = Math.sin(-drone.roll);
+  x1 = c * dx - s * dy;
+  y1 = s * dx + c * dy;
+  dx = x1; dy = y1;
+
+  return {x: dx, y: dy, z: dz};
+}
+
+function project(p){
+  if(p.z < 0.15) return null;
+  const f = CFG.fov;
+  return {
+    x: W/2 + f * p.x / p.z,
+    y: H/2 - f * p.y / p.z,
+    z: p.z
+  };
+}
+
+function render(){
+  // Camera shake offset
+  const shake = CFG.cameraShake;
+  const shakeX = (Math.random() - 0.5) * shake;
+  const shakeY = (Math.random() - 0.5) * shake;
+
+  // Sky gradient
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#04041a');
+  g.addColorStop(0.55, '#18082e');
+  g.addColorStop(0.75, '#3a0f3e');
+  g.addColorStop(0.9, '#5a1840');
+  g.addColorStop(1, '#2a0820');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Distant sun glow
+  const sunX = W/2 + shakeX * 0.3;
+  const sunY = H * 0.55 + shakeY * 0.3;
+  const sunG = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, Math.max(W, H) * 0.7);
+  sunG.addColorStop(0, 'rgba(255,80,120,.35)');
+  sunG.addColorStop(0.4, 'rgba(180,40,90,.15)');
+  sunG.addColorStop(1, 'transparent');
+  ctx.fillStyle = sunG;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  ctx.save();
+  for(let i = 0; i < 80; i++){
+    // hash-based stable positions
+    const sx = ((i * 137.5) % 1) * W + Math.sin(i) * 3 - drone.yaw * 30;
+    const sy = ((i * 71.3) % 1) * H * 0.6;
+    const wrapped = ((sx % W) + W) % W;
+    ctx.globalAlpha = 0.3 + ((i * 53) % 100) / 200;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(wrapped, sy, 1.5, 1.5);
+  }
+  ctx.restore();
+
+  // Horizon line
+  const horizonProj = toCam({x: drone.pos.x, y: 0, z: drone.pos.z - 500});
+  if(horizonProj.z > 0.5){
+    const hp = project(horizonProj);
+    if(hp){
+      ctx.strokeStyle = 'rgba(255,100,150,.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, hp.y);
+      ctx.lineTo(W, hp.y);
+      ctx.stroke();
+    }
+  }
+
+  // Ground grid (simple projected lines)
+  drawGroundGrid();
+
+  // Collect renderables with depth
+  const renderables = [];
+
+  for(const b of buildings){
+    if(!b.alive) continue;
+    const dx = b.x - drone.pos.x;
+    const dy = b.h/2 - drone.pos.y;
+    const dz = b.z - drone.pos.z;
+    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    renderables.push({type: 'building', data: b, dist});
+  }
+
+  for(const ex of explosions){
+    // Use first particle as anchor for sorting
+    if(ex.particles.length + ex.smoke.length === 0) continue;
+    let px = 0, py = 0, pz = 0, n = 0;
+    for(const p of ex.particles){ px += p.pos.x; py += p.pos.y; pz += p.pos.z; n++; }
+    for(const s of ex.smoke){ px += s.pos.x; py += s.pos.y; pz += s.pos.z; n++; }
+    if(n === 0) continue;
+    px /= n; py /= n; pz /= n;
+    const dx = px - drone.pos.x, dy = py - drone.pos.y, dz = pz - drone.pos.z;
+    const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+    renderables.push({type: 'explosion', data: ex, dist});
+  }
+
+  for(const b of bombs){
+    const dx = b.pos.x - drone.pos.x;
+    const dy = b.pos.y - drone.pos.y;
+    const dz = b.pos.z - drone.pos.z;
+    const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+    renderables.push({type: 'bomb', data: b, dist});
+  }
+
+  // Sort far to near
+  renderables.sort((a, b) => b.dist - a.dist);
+
+  // Render
+  for(const r of renderables){
+    if(r.type === 'building') drawBuilding(r.data, shakeX, shakeY);
+    else if(r.type === 'explosion') drawExplosion(r.data, shakeX, shakeY);
+    else if(r.type === 'bomb') drawBomb(r.data, shakeX, shakeY);
+  }
+
+  // Damage flash
+  // (handled separately)
+
+  // Speed lines
+  const speed = Math.sqrt(drone.vel.x**2 + drone.vel.y**2 + drone.vel.z**2);
+  if(speed > 20){
+    ctx.save();
+    ctx.strokeStyle = `rgba(0,240,255,${(speed - 20) / 60})`;
+    ctx.lineWidth = 1;
+    for(let i = 0; i < 8; i++){
+      const a = (i / 8) * Math.PI * 2 + performance.now() * 0.0003;
+      const r1 = 100 + Math.random() * 50;
+      const r2 = 200 + Math.random() * 150;
+      ctx.beginPath();
+      ctx.moveTo(W/2 + Math.cos(a) * r1, H/2 + Math.sin(a) * r1);
+      ctx.lineTo(W/2 + Math.cos(a) * r2, H/2 + Math.sin(a) * r2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawGroundGrid(){
+  // Grid lines at y=0
+  const size = 20;
+  const range = 10;
+  const centerX = Math.round(drone.pos.x / size) * size;
+  const centerZ = Math.round(drone.pos.z / size) * size;
+
+  ctx.strokeStyle = 'rgba(0,240,255,.08)';
+  ctx.lineWidth = 1;
+
+  // Vertical lines (along Z)
+  for(let i = -range; i <= range; i++){
+    const x = centerX + i * size;
+    const p1 = project(toCam({x, y: 0, z: centerZ - range * size}));
+    const p2 = project(toCam({x, y: 0, z: centerZ + range * size}));
+    if(p1 && p2){
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+  }
+  // Horizontal lines (along X)
+  for(let i = -range; i <= range; i++){
+    const z = centerZ + i * size;
+    const p1 = project(toCam({x: centerX - range * size, y: 0, z}));
+    const p2 = project(toCam({x: centerX + range * size, y: 0, z}));
+    if(p1 && p2){
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawBuilding(b, shakeX, shakeY){
+  // 8 corners
+  const halfW = b.w / 2, halfD = b.d / 2;
+  const corners = [
+    // bottom (y=0)
+    {x: b.x - halfW, y: 0, z: b.z - halfD}, // 0
+    {x: b.x + halfW, y: 0, z: b.z - halfD}, // 1
+    {x: b.x + halfW, y: 0, z: b.z + halfD}, // 2
+    {x: b.x - halfW, y: 0, z: b.z + halfD}, // 3
+    // top (y=b.h)
+    {x: b.x - halfW, y: b.h, z: b.z - halfD}, // 4
+    {x: b.x + halfW, y: b.h, z: b.z - halfD}, // 5
+    {x: b.x + halfW, y: b.h, z: b.z + halfD}, // 6
+    {x: b.x - halfW, y: b.h, z: b.z + halfD}  // 7
+  ];
+
+  // Transform to camera and project
+  const proj = corners.map(c => {
+    const cp = toCam(c);
+    if(cp.z < 0.15) return null;
+    return {
+      x: W/2 + CFG.fov * cp.x / cp.z + shakeX,
+      y: H/2 - CFG.fov * cp.y / cp.z + shakeY,
+      z: cp.z
+    };
+  });
+
+  // Define faces (indices of corners)
+  const faces = [
+    {idx: [0, 1, 2, 3], normal: {x:0, y:-1, z:0}, shade: 0.2}, // bottom
+    {idx: [4, 5, 6, 7], normal: {x:0, y:1, z:0}, shade: 1.0},  // top
+    {idx: [0, 1, 5, 4], normal: {x:0, y:0, z:-1}, shade: 0.5}, // back (-Z)
+    {idx: [3, 2, 6, 7], normal: {x:0, y:0, z:1}, shade: 0.7},  // front (+Z)
+    {idx: [0, 3, 7, 4], normal: {x:-1, y:0, z:0}, shade: 0.4}, // left
+    {idx: [1, 2, 6, 5], normal: {x:1, y:0, z:0}, shade: 0.6}   // right
+  ];
+
+  // For each face, check backface culling
+  for(const f of faces){
+    // All corners must project
+    if(f.idx.some(i => proj[i] === null)) continue;
+
+    // Camera direction to face center
+    const fc = {x:0, y:0, z:0};
+    for(const i of f.idx){
+      fc.x += corners[i].x / 4;
+      fc.y += corners[i].y / 4;
+      fc.z += corners[i].z / 4;
+    }
+    const camDir = {
+      x: drone.pos.x - fc.x,
+      y: drone.pos.y - fc.y,
+      z: drone.pos.z - fc.z
+    };
+    const dot = f.normal.x * camDir.x + f.normal.y * camDir.y + f.normal.z * camDir.z;
+    if(dot <= 0) continue; // backface
+
+    // Draw face
+    const pts = f.idx.map(i => proj[i]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+
+    // Fill color (shaded)
+    const baseHue = 260;
+    const sat = 60;
+    const light = 8 + f.shade * 18;
+    ctx.fillStyle = `hsl(${baseHue},${sat}%,${light}%)`;
+    ctx.fill();
+
+    // Edge outline
+    ctx.strokeStyle = `hsla(${baseHue},90%,60%,${0.15 + f.shade * 0.3})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Add neon strips on edges (aesthetic)
+  // Vertical edges
+  for(let i = 0; i < 4; i++){
+    const a = proj[i], bb = proj[i+4];
+    if(a && bb){
+      ctx.strokeStyle = `hsla(280,90%,60%,${0.4})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(bb.x, bb.y);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawBomb(b, shakeX, shakeY){
+  const p = project(toCam(b.pos));
+  if(!p) return;
+  const size = Math.max(3, 200 / p.z);
+  // Glow
+  const glow = ctx.createRadialGradient(p.x + shakeX, p.y + shakeY, 0, p.x + shakeX, p.y + shakeY, size * 4);
+  glow.addColorStop(0, 'rgba(255,120,50,.8)');
+  glow.addColorStop(1, 'transparent');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(p.x + shakeX, p.y + shakeY, size * 4, 0, Math.PI * 2);
+  ctx.fill();
+  // Core
+  ctx.fillStyle = '#ffcc33';
+  ctx.beginPath();
+  ctx.arc(p.x + shakeX, p.y + shakeY, size, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawExplosion(ex, shakeX, shakeY){
+  // Smoke first (behind)
+  for(const s of ex.smoke){
+    const p = project(toCam(s.pos));
+    if(!p) continue;
+    const size = Math.max(4, 600 * s.size / 1000 / p.z * 3);
+    const alpha = s.life * 0.35;
+    const grad = ctx.createRadialGradient(p.x + shakeX, p.y + shakeY, 0, p.x + shakeX, p.y + shakeY, size);
+    grad.addColorStop(0, `rgba(80,60,60,${alpha})`);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(p.x + shakeX, p.y + shakeY, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Fire particles
+  for(const p of ex.particles){
+    const pp = project(toCam(p.pos));
+    if(!pp) continue;
+    const size = Math.max(1, 200 * p.size / 100 / pp.z * 4);
+    const alpha = Math.min(1, p.life * 1.5);
+    if(p.sat !== undefined && p.light !== undefined){
+      // debris (gray)
+      ctx.fillStyle = `hsla(0,0%,${p.light}%,${alpha})`;
+    } else {
+      ctx.fillStyle = `hsla(${p.hue},100%,${50 + p.life * 20}%,${alpha})`;
+    }
+    ctx.beginPath();
+    ctx.arc(pp.x + shakeX, pp.y + shakeY, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/* ================= HUD ================= */
+function updateHUD(){
+  document.getElementById('leftVal').textContent = totalBuildings - destroyedCount;
+  document.getElementById('scoreVal').textContent = Math.floor(score);
+  document.getElementById('rocketVal').textContent = ammo;
+  const alt = Math.max(0, Math.round(drone.pos.y));
+  const spd = Math.round(Math.sqrt(drone.vel.x**2 + drone.vel.y**2 + drone.vel.z**2));
+  document.getElementById('altVal').textContent = alt;
+  document.getElementById('spdVal').textContent = spd;
+}
+
+/* ================= GAME STATE ================= */
+let score = 0;
+let gameStartTime = 0;
+let gameRunning = false;
+let lastTime = 0;
+
+function startGame(){
+  // Reset state
+  drone.pos = {x: 0, y: 25, z: -80};
+  drone.vel = {x: 0, y: 0, z: 0};
+  drone.yaw = 0; drone.pitch = 0; drone.roll = 0;
+  drone.yawRate = 0; drone.pitchRate = 0; drone.rollRate = 0;
+  drone.alive = true;
+  bombs.length = 0;
+  explosions.length = 0;
+  ammo = 5;
+  score = 0;
+  destroyedCount = 0;
+
+  // Spawn buildings
+  buildings.length = 0;
+  for(let i = 0; i < 20; i++){
+    buildings.push(spawnBuilding());
+  }
+  totalBuildings = buildings.length;
+
+  gameStartTime = performance.now();
+  gameRunning = true;
+
+  document.getElementById('menuScreen').classList.add('hide');
+  document.getElementById('winScreen').classList.add('hide');
+  document.getElementById('loseScreen').classList.add('hide');
+  document.getElementById('hud').style.display = 'block';
+  if(isMobile) document.getElementById('fireBtn').classList.add('show');
+
+  updateHUD();
+}
+
+function endGame(){
+  gameRunning = false;
+  document.getElementById('fireBtn').classList.remove('show');
+}
+
+function winGame(){
+  endGame();
+  const t = (performance.now() - gameStartTime) / 1000;
+  const bonus = Math.max(0, 5000 - Math.floor(t) * 50);
+  score += bonus;
+  document.getElementById('winScore').textContent = Math.floor(score);
+  document.getElementById('winTime').textContent = formatTime(t);
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('winScreen').classList.remove('hide');
+}
+
+function loseGame(reason){
+  endGame();
+  const t = (performance.now() - gameStartTime) / 1000;
+  document.getElementById('loseScore').textContent = Math.floor(score);
+  document.getElementById('loseDestroyed').textContent = destroyedCount + ' / ' + totalBuildings;
+  document.getElementById('loseReason').textContent = reason;
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('loseScreen').classList.remove('hide');
+}
+
+function formatTime(s){
+  const m = Math.floor(s / 60);
+  const ss = Math.floor(s % 60);
+  return m + ':' + String(ss).padStart(2, '0');
+}
+
+/* ================= MAIN LOOP ================= */
+function loop(t){
+  const dt = Math.min((t - lastTime) / 1000, 0.05);
+  lastTime = t;
+
+  if(gameRunning){
+    updateDrone(dt);
+    updateBombs(dt);
+    updateExplosions(dt);
+
+    // Score over time
+    score += dt * 10;
+
+    // Check win
+    if(destroyedCount >= totalBuildings){
+      winGame();
+    }
+
+    // Check out of ammo (lose if no ammo and buildings remain)
+    if(ammo <= 0 && bombs.length === 0 && destroyedCount < totalBuildings){
+      // Give a bit of time for bombs to land
+      setTimeout(() => {
+        if(gameRunning && ammo <= 0 && bombs.length === 0 && destroyedCount < totalBuildings){
+          loseGame('Закончились заряды');
+        }
+      }, 3000);
+    }
+
+    // Update timer
+    const elapsed = (performance.now() - gameStartTime) / 1000;
+    document.getElementById('timeVal').textContent = formatTime(elapsed);
+
+    updateHUD();
+  }
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* ================= INIT ================= */
+setupSticks();
+document.getElementById('playBtn').onclick = startGame;
+document.getElementById('winRetry').onclick = startGame;
+document.getElementById('loseRetry').onclick = startGame;
+document.getElementById('winMenu').onclick = () => {
+  document.getElementById('winScreen').classList.add('hide');
+  document.getElementById('menuScreen').classList.remove('hide');
+};
+document.getElementById('loseMenu').onclick = () => {
+  document.getElementById('loseScreen').classList.add('hide');
+  document.getElementById('menuScreen').classList.remove('hide');
+};
+
+if(isMobile){
+  document.getElementById('mobInfo').style.display = 'block';
+} else {
+  document.getElementById('pcInfo').style.display = 'block';
+}
+
+// Start loop
+lastTime = performance.now();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
